@@ -27,7 +27,8 @@ class Charades(torch.utils.data.IterableDataset):
     """
 
     # Number of classes represented by this dataset's annotated labels.
-    NUM_CLASSES = 157
+    # NUM_CLASSES = 157
+    NUM_CLASSES = 7
 
     def __init__(
         self,

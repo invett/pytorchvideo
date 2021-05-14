@@ -81,7 +81,7 @@ class VideoClassificationLightningModule(pytorch_lightning.LightningModule):
         if self.args.arch == "video_resnet":
             self.model = pytorchvideo.models.resnet.create_resnet(
                 input_channel=3,
-                model_num_class=400,
+                model_num_class=7,
             )
             self.batch_key = "video"
         elif self.args.arch == "audio_resnet":
@@ -299,17 +299,27 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
         """
         sampler = DistributedSampler if self.trainer.use_ddp else RandomSampler
         train_transform = self._make_transforms(mode="train")
-        self.train_dataset = LimitDataset(
-            pytorchvideo.data.Kinetics(
-                data_path=os.path.join(self.args.data_path, "train.csv"),
-                clip_sampler=pytorchvideo.data.make_clip_sampler(
-                    "random", self.args.clip_duration
-                ),
-                video_path_prefix=self.args.video_path_prefix,
-                transform=train_transform,
-                video_sampler=sampler,
-            )
-        )
+
+        self.train_dataset = pytorchvideo.data.Charades(data_path='/tmp/pytorchvideo/KITTI-360_3D-MASKED/train/annotations_train.txt',
+                                                        clip_sampler=pytorchvideo.data.make_clip_sampler("random",
+                                                                                            self.args.clip_duration),
+                                                        video_sampler=sampler,
+                                                        transform=train_transform,
+                                                        video_path_prefix='/tmp/pytorchvideo/KITTI-360_3D-MASKED/train',
+                                                        frames_per_clip=None
+                                                        )
+
+        # self.train_dataset = LimitDataset(
+        #     pytorchvideo.data.Kinetics(
+        #         data_path=os.path.join(self.args.data_path, "train.csv"),
+        #         clip_sampler=pytorchvideo.data.make_clip_sampler(
+        #             "random", self.args.clip_duration
+        #         ),
+        #         video_path_prefix=self.args.video_path_prefix,
+        #         transform=train_transform,
+        #         video_sampler=sampler,
+        #     )
+        # )
         return torch.utils.data.DataLoader(
             self.train_dataset,
             batch_size=self.args.batch_size,
@@ -322,17 +332,27 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
         """
         sampler = DistributedSampler if self.trainer.use_ddp else RandomSampler
         val_transform = self._make_transforms(mode="val")
-        self.val_dataset = LimitDataset(
-            pytorchvideo.data.Kinetics(
-                data_path=os.path.join(self.args.data_path, "val.csv"),
-                clip_sampler=pytorchvideo.data.make_clip_sampler(
-                    "uniform", self.args.clip_duration
-                ),
-                video_path_prefix=self.args.video_path_prefix,
-                transform=val_transform,
-                video_sampler=sampler,
-            )
-        )
+
+        self.val_dataset = pytorchvideo.data.Charades(data_path='/tmp/pytorchvideo/KITTI-360_3D-MASKED/validation/annotations_validation.txt',
+                                                      clip_sampler=pytorchvideo.data.make_clip_sampler("random",
+                                                                                          self.args.clip_duration),
+                                                      video_sampler=sampler,
+                                                      transform=val_transform,
+                                                      video_path_prefix='/tmp/pytorchvideo/KITTI-360_3D-MASKED/validation',
+                                                      frames_per_clip=None
+                                                      )
+
+        # self.val_dataset = LimitDataset(
+        #     pytorchvideo.data.Kinetics(
+        #         data_path=os.path.join(self.args.data_path, "val.csv"),
+        #         clip_sampler=pytorchvideo.data.make_clip_sampler(
+        #             "uniform", self.args.clip_duration
+        #         ),
+        #         video_path_prefix=self.args.video_path_prefix,
+        #         transform=val_transform,
+        #         video_sampler=sampler,
+        #     )
+        # )
         return torch.utils.data.DataLoader(
             self.val_dataset,
             batch_size=self.args.batch_size,
