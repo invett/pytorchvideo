@@ -6,8 +6,10 @@ import logging
 import os
 
 import pytorch_lightning
+from pytorch_lightning.loggers import WandbLogger
 import pytorchvideo.data
 import pytorchvideo.models.resnet
+import pytorchvideo.models.x3d
 import torch
 import torch.nn.functional as F
 from pytorch_lightning.callbacks import LearningRateMonitor
@@ -27,7 +29,7 @@ from torchvision.transforms import (
     Compose,
     Lambda,
     RandomCrop,
-    RandomHorizontalFlip,
+    #RandomHorizontalFlip,
 )
 
 
@@ -79,6 +81,7 @@ class VideoClassificationLightningModule(pytorch_lightning.LightningModule):
         # this could be changed to any other PyTorchVideo model (e.g. for SlowFast use
         # create_slowfast).
         if self.args.arch == "video_resnet":
+            # self.model = pytorchvideo.models.x3d.create_x3d(model_num_class=7, input_clip_length=6)
             self.model = pytorchvideo.models.resnet.create_resnet(
                 input_channel=3,
                 model_num_class=7,
@@ -242,7 +245,7 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
                             max_size=args.video_max_short_side_scale,
                         ),
                         RandomCrop(args.video_crop_size),
-                        RandomHorizontalFlip(p=args.video_horizontal_flip_p),
+                        #RandomHorizontalFlip(p=args.video_horizontal_flip_p),
                     ]
                     if mode == "train"
                     else [
@@ -415,9 +418,9 @@ def main():
     # Data parameters.
     parser.add_argument("--data_path", default=None, type=str, required=True)
     parser.add_argument("--video_path_prefix", default="", type=str)
-    parser.add_argument("--workers", default=0, type=int)
-    parser.add_argument("--batch_size", default=1, type=int)
-    parser.add_argument("--clip_duration", default=2, type=float)
+    parser.add_argument("--workers", default=16, type=int)
+    parser.add_argument("--batch_size", default=16, type=int)
+    parser.add_argument("--clip_duration", default=6, type=float)
     parser.add_argument(
         "--data_type", default="video", choices=["video", "audio"], type=str
     )
@@ -427,7 +430,8 @@ def main():
     parser.add_argument("--video_crop_size", default=224, type=int)
     parser.add_argument("--video_min_short_side_scale", default=256, type=int)
     parser.add_argument("--video_max_short_side_scale", default=320, type=int)
-    parser.add_argument("--video_horizontal_flip_p", default=0.5, type=float)
+    parser.add_argument("--video_horizontal_flip_p", default=0.0, type=float)
+
     parser.add_argument("--audio_raw_sample_rate", default=44100, type=int)
     parser.add_argument("--audio_resampled_rate", default=16000, type=int)
     parser.add_argument("--audio_mel_window_size", default=32, type=int)
@@ -440,7 +444,7 @@ def main():
     # Trainer parameters.
     parser = pytorch_lightning.Trainer.add_argparse_args(parser)
     parser.set_defaults(
-        max_epochs=200,
+        max_epochs=5000,
         callbacks=[LearningRateMonitor()],
         replace_sampler_ddp=False,
         reload_dataloaders_every_epoch=False,
@@ -470,6 +474,8 @@ def main():
 
 def train(args):
     trainer = pytorch_lightning.Trainer.from_argparse_args(args)
+    wandb_logger = WandbLogger()
+    trainer.logger = wandb_logger
     classification_module = VideoClassificationLightningModule(args)
     data_module = KineticsDataModule(args)
     trainer.fit(classification_module, data_module)
