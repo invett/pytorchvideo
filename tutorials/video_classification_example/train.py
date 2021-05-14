@@ -132,8 +132,8 @@ class VideoClassificationLightningModule(pytorch_lightning.LightningModule):
         """
         x = batch[self.batch_key]
         y_hat = self.model(x)
-        loss = F.cross_entropy(y_hat, batch["label"])
-        acc = self.train_accuracy(F.softmax(y_hat, dim=-1), batch["label"])
+        loss = F.cross_entropy(y_hat, batch["video_label"][0])
+        acc = self.train_accuracy(F.softmax(y_hat, dim=-1), batch["video_label"][0])
         self.log("train_loss", loss)
         self.log(
             "train_acc", acc, on_step=True, on_epoch=True, prog_bar=True, sync_dist=True
@@ -148,8 +148,8 @@ class VideoClassificationLightningModule(pytorch_lightning.LightningModule):
         """
         x = batch[self.batch_key]
         y_hat = self.model(x)
-        loss = F.cross_entropy(y_hat, batch["label"])
-        acc = self.val_accuracy(F.softmax(y_hat, dim=-1), batch["label"])
+        loss = F.cross_entropy(y_hat, batch["video_label"][0])
+        acc = self.val_accuracy(F.softmax(y_hat, dim=-1), batch["video_label"][0])
         self.log("val_loss", loss)
         self.log(
             "val_acc", acc, on_step=True, on_epoch=True, prog_bar=True, sync_dist=True
@@ -415,13 +415,13 @@ def main():
     # Data parameters.
     parser.add_argument("--data_path", default=None, type=str, required=True)
     parser.add_argument("--video_path_prefix", default="", type=str)
-    parser.add_argument("--workers", default=8, type=int)
-    parser.add_argument("--batch_size", default=32, type=int)
+    parser.add_argument("--workers", default=0, type=int)
+    parser.add_argument("--batch_size", default=1, type=int)
     parser.add_argument("--clip_duration", default=2, type=float)
     parser.add_argument(
         "--data_type", default="video", choices=["video", "audio"], type=str
     )
-    parser.add_argument("--video_num_subsampled", default=8, type=int)
+    parser.add_argument("--video_num_subsampled", default=6, type=int)
     parser.add_argument("--video_means", default=(0.45, 0.45, 0.45), type=tuple)
     parser.add_argument("--video_stds", default=(0.225, 0.225, 0.225), type=tuple)
     parser.add_argument("--video_crop_size", default=224, type=int)
