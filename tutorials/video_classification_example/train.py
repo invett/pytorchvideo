@@ -10,6 +10,7 @@ from pytorch_lightning.loggers import WandbLogger
 import pytorchvideo.data
 import pytorchvideo.models.resnet
 import pytorchvideo.models.x3d
+import pytorchvideo.models.slowfast
 import torch
 import torch.nn.functional as F
 from pytorch_lightning.callbacks import LearningRateMonitor
@@ -81,13 +82,21 @@ class VideoClassificationLightningModule(pytorch_lightning.LightningModule):
         # this could be changed to any other PyTorchVideo model (e.g. for SlowFast use
         # create_slowfast).
         if self.args.arch == "video_resnet":
-            # self.model = pytorchvideo.models.x3d.create_x3d(model_num_class=7, input_clip_length=6)
-            self.model = pytorchvideo.models.resnet.create_resnet(
-                input_channel=3,
-                model_num_class=7,
-            )
             self.batch_key = "video"
+
+            select_net = 2
+            if select_net == 0:
+                self.model = pytorchvideo.models.resnet.create_resnet(
+                    input_channel=3,
+                    model_num_class=7,
+                )
+            elif select_net == 1:
+                self.model = pytorchvideo.models.x3d.create_x3d(model_num_class=7, input_clip_length=6)
+            elif select_net == 2:
+                self.model = pytorchvideo.models.slowfast.create_slowfast(model_num_class=7)
+
         elif self.args.arch == "audio_resnet":
+            return (-2)
             self.model = pytorchvideo.models.resnet.create_acoustic_resnet(
                 input_channel=1,
                 model_num_class=400,
@@ -303,12 +312,39 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
         sampler = DistributedSampler if self.trainer.use_ddp else RandomSampler
         train_transform = self._make_transforms(mode="train")
 
-        self.train_dataset = pytorchvideo.data.Charades(data_path='/tmp/pytorchvideo/KITTI-360_3D-MASKED/train/annotations_train.txt',
+        # self.train_dataset = pytorchvideo.data.Charades(data_path='/tmp/pytorchvideo/KITTI-360_3D-MASKED/train/annotations_train.txt',
+        #                                                 clip_sampler=pytorchvideo.data.make_clip_sampler("random",
+        #                                                                                     self.args.clip_duration),
+        #                                                 video_sampler=sampler,
+        #                                                 transform=train_transform,
+        #                                                 video_path_prefix='/tmp/pytorchvideo/KITTI-360_3D-MASKED/train',
+        #                                                 frames_per_clip=None
+        #                                                 )
+
+        # self.train_dataset = pytorchvideo.data.Charades(data_path='/tmp/pytorchvideo/KITTI-360/train/annotations_train.txt',
+        #                                                 clip_sampler=pytorchvideo.data.make_clip_sampler("random",
+        #                                                                                     self.args.clip_duration),
+        #                                                 video_sampler=sampler,
+        #                                                 transform=train_transform,
+        #                                                 video_path_prefix='/tmp/pytorchvideo/KITTI-360/train',
+        #                                                 frames_per_clip=None
+        #                                                 )
+
+        # self.train_dataset = pytorchvideo.data.Charades(data_path='/tmp/pytorchvideo/alcala26/train/annotations_train.txt',
+        #                                                 clip_sampler=pytorchvideo.data.make_clip_sampler("random",
+        #                                                                                     self.args.clip_duration),
+        #                                                 video_sampler=sampler,
+        #                                                 transform=train_transform,
+        #                                                 video_path_prefix='/tmp/pytorchvideo/alcala26/train',
+        #                                                 frames_per_clip=None
+        #                                                 )
+
+        self.train_dataset = pytorchvideo.data.Charades(data_path='/tmp/pytorchvideo/alcala26/train/annotations_train.txt',
                                                         clip_sampler=pytorchvideo.data.make_clip_sampler("random",
                                                                                             self.args.clip_duration),
                                                         video_sampler=sampler,
                                                         transform=train_transform,
-                                                        video_path_prefix='/tmp/pytorchvideo/KITTI-360_3D-MASKED/train',
+                                                        video_path_prefix='/tmp/pytorchvideo/alcala26-full/train',
                                                         frames_per_clip=None
                                                         )
 
@@ -336,12 +372,39 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
         sampler = DistributedSampler if self.trainer.use_ddp else RandomSampler
         val_transform = self._make_transforms(mode="val")
 
-        self.val_dataset = pytorchvideo.data.Charades(data_path='/tmp/pytorchvideo/KITTI-360_3D-MASKED/validation/annotations_validation.txt',
+        # self.val_dataset = pytorchvideo.data.Charades(data_path='/tmp/pytorchvideo/KITTI-360_3D-MASKED/validation/annotations_validation.txt',
+        #                                               clip_sampler=pytorchvideo.data.make_clip_sampler("random",
+        #                                                                                   self.args.clip_duration),
+        #                                               video_sampler=sampler,
+        #                                               transform=val_transform,
+        #                                               video_path_prefix='/tmp/pytorchvideo/KITTI-360_3D-MASKED/validation',
+        #                                               frames_per_clip=None
+        #                                               )
+
+        # self.val_dataset = pytorchvideo.data.Charades(data_path='/tmp/pytorchvideo/KITTI-360/validation/annotations_validation.txt',
+        #                                               clip_sampler=pytorchvideo.data.make_clip_sampler("random",
+        #                                                                                   self.args.clip_duration),
+        #                                               video_sampler=sampler,
+        #                                               transform=val_transform,
+        #                                               video_path_prefix='/tmp/pytorchvideo/KITTI-360/validation',
+        #                                               frames_per_clip=None
+        #                                               )
+
+        # self.val_dataset = pytorchvideo.data.Charades(data_path='/tmp/pytorchvideo/alcala26/validation/annotations_validation.txt',
+        #                                               clip_sampler=pytorchvideo.data.make_clip_sampler("random",
+        #                                                                                   self.args.clip_duration),
+        #                                               video_sampler=sampler,
+        #                                               transform=val_transform,
+        #                                               video_path_prefix='/tmp/pytorchvideo/alcala26/validation',
+        #                                               frames_per_clip=None
+        #                                               )
+
+        self.val_dataset = pytorchvideo.data.Charades(data_path='/tmp/pytorchvideo/alcala26/validation/annotations_validation.txt',
                                                       clip_sampler=pytorchvideo.data.make_clip_sampler("random",
                                                                                           self.args.clip_duration),
                                                       video_sampler=sampler,
                                                       transform=val_transform,
-                                                      video_path_prefix='/tmp/pytorchvideo/KITTI-360_3D-MASKED/validation',
+                                                      video_path_prefix='/tmp/pytorchvideo/alcala26-full/validation',
                                                       frames_per_clip=None
                                                       )
 
@@ -416,11 +479,11 @@ def main():
     )
 
     # Data parameters.
-    parser.add_argument("--data_path", default=None, type=str, required=True)
+    parser.add_argument("--data_path", default=None, type=str, required=False)
     parser.add_argument("--video_path_prefix", default="", type=str)
     parser.add_argument("--workers", default=16, type=int)
     parser.add_argument("--batch_size", default=16, type=int)
-    parser.add_argument("--clip_duration", default=6, type=float)
+    parser.add_argument("--clip_duration", default=26, type=float)
     parser.add_argument(
         "--data_type", default="video", choices=["video", "audio"], type=str
     )
@@ -444,7 +507,7 @@ def main():
     # Trainer parameters.
     parser = pytorch_lightning.Trainer.add_argparse_args(parser)
     parser.set_defaults(
-        max_epochs=5000,
+        max_epochs=1000,
         callbacks=[LearningRateMonitor()],
         replace_sampler_ddp=False,
         reload_dataloaders_every_epoch=False,
@@ -474,8 +537,8 @@ def main():
 
 def train(args):
     trainer = pytorch_lightning.Trainer.from_argparse_args(args)
-    wandb_logger = WandbLogger()
-    trainer.logger = wandb_logger
+    # wandb_logger = WandbLogger()
+    # trainer.logger = wandb_logger
     classification_module = VideoClassificationLightningModule(args)
     data_module = KineticsDataModule(args)
     trainer.fit(classification_module, data_module)
