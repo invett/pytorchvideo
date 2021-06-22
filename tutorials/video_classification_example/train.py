@@ -11,6 +11,7 @@ import pytorchvideo.data
 import pytorchvideo.models.resnet
 import pytorchvideo.models.x3d
 import pytorchvideo.models.slowfast
+import pytorchvideo.models.stem
 import torch
 import torch.nn.functional as F
 from pytorch_lightning.callbacks import LearningRateMonitor
@@ -91,9 +92,14 @@ class VideoClassificationLightningModule(pytorch_lightning.LightningModule):
                     model_num_class=7,
                 )
             elif select_net == 1:
-                self.model = pytorchvideo.models.x3d.create_x3d(model_num_class=7, input_clip_length=6)
+                self.model = pytorchvideo.models.x3d.create_x3d(model_num_class=7,
+                                                                input_clip_length=self.args.clip_duration,
+                                                                input_crop_size=224
+                                                                )
             elif select_net == 2:
                 self.model = pytorchvideo.models.slowfast.create_slowfast(model_num_class=7)
+            elif select_net == 3:
+                exit(-33)
 
         elif self.args.arch == "audio_resnet":
             return (-2)
@@ -178,6 +184,9 @@ class VideoClassificationLightningModule(pytorch_lightning.LightningModule):
             momentum=self.args.momentum,
             weight_decay=self.args.weight_decay,
         )
+
+        #AUGUSTO: optimizer = torch.optim.AdamW(self.parameters(), lr=self.args.lr, weight_decay=self.args.weight_decay)
+
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer, self.args.max_epochs, last_epoch=-1
         )
@@ -249,11 +258,18 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
                 ]
                 + (
                     [
-                        RandomShortSideScale(
-                            min_size=args.video_min_short_side_scale,
-                            max_size=args.video_max_short_side_scale,
-                        ),
-                        RandomCrop(args.video_crop_size),
+                        # OPTION 2
+                        ShortSideScale(args.video_min_short_side_scale),
+                        CenterCrop(args.video_crop_size),
+
+                        # OPTION 1
+                        #RandomShortSideScale(
+                        #    min_size=args.video_min_short_side_scale,
+                        #    max_size=args.video_max_short_side_scale,
+                        #),
+                        #RandomCrop(args.video_crop_size),
+
+                        # BUT ALWAYS EXCLUDE
                         #RandomHorizontalFlip(p=args.video_horizontal_flip_p),
                     ]
                     if mode == "train"
@@ -339,12 +355,13 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
         #                                                 frames_per_clip=None
         #                                                 )
 
-        self.train_dataset = pytorchvideo.data.Charades(data_path='/tmp/pytorchvideo/alcala26/train/annotations_train.txt',
+        # AUGUSTO: CHECK HERE 15 FRAME OR OTHER
+        self.train_dataset = pytorchvideo.data.Charades(data_path='/tmp/pytorchvideo/alcala26-15frame/train/annotations_train.txt',
                                                         clip_sampler=pytorchvideo.data.make_clip_sampler("random",
                                                                                             self.args.clip_duration),
                                                         video_sampler=sampler,
                                                         transform=train_transform,
-                                                        video_path_prefix='/tmp/pytorchvideo/alcala26-full/train',
+                                                        video_path_prefix='/tmp/pytorchvideo/alcala26-15frame/train',
                                                         frames_per_clip=None
                                                         )
 
@@ -399,12 +416,16 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
         #                                               frames_per_clip=None
         #                                               )
 
-        self.val_dataset = pytorchvideo.data.Charades(data_path='/tmp/pytorchvideo/alcala26/validation/annotations_validation.txt',
+        # AUGUSTO:
+        # ???          self.val_dataset = pytorchvideo.data.Charades(data_path='/tmp/pytorchvideo/alcala26-15frame/validation/annotations_validation.txt',
+        #                                                  video_path_prefix = '/tmp/pytorchvideo/alcala26-15frame/validation',
+
+        self.val_dataset = pytorchvideo.data.Charades(data_path='/tmp/pytorchvideo/alcala26-15frame/validation/annotations_validation.txt',
                                                       clip_sampler=pytorchvideo.data.make_clip_sampler("random",
                                                                                           self.args.clip_duration),
                                                       video_sampler=sampler,
                                                       transform=val_transform,
-                                                      video_path_prefix='/tmp/pytorchvideo/alcala26-full/validation',
+                                                      video_path_prefix='/tmp/pytorchvideo/alcala26-15frame/validation',
                                                       frames_per_clip=None
                                                       )
 
@@ -424,6 +445,21 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
             batch_size=self.args.batch_size,
             num_workers=self.args.workers,
         )
+
+    #AUGUSTO: I THINK I NEVER USED THIS
+    def test_dataloader(self):
+
+        sampler = DistributedSampler if self.trainer.use_ddp else RandomSampler
+        val_transform = self._make_transforms(mode="val")
+
+        self.train_dataset = pytorchvideo.data.Charades(data_path='/tmp/pytorchvideo/alcala26-15frame/test/annotations_test.txt',
+                                                        clip_sampler=pytorchvideo.data.make_clip_sampler("random",
+                                                                                            self.args.clip_duration),
+                                                        video_sampler=sampler,
+                                                        transform=None,
+                                                        video_path_prefix='/tmp/pytorchvideo/alcala26-15frame/validation',
+                                                        frames_per_clip=None
+                                                        )
 
 
 class LimitDataset(torch.utils.data.Dataset):
@@ -468,7 +504,9 @@ def main():
     parser.add_argument("--partition", default="dev", type=str)
 
     # Model parameters.
-    parser.add_argument("--lr", "--learning-rate", default=0.1, type=float)
+    # parser.add_argument("--lr", "--learning-rate", default=0.1, type=float) #AUGUSTO: ORIGINAL
+    # parser.add_argument("--lr", "--learning-rate", default=0.01, type=float) #AUGUSTO: TEST 1
+    parser.add_argument("--lr", "--learning-rate", default=0.0001, type=float) #AUGUSTO: TEST 2
     parser.add_argument("--momentum", default=0.9, type=float)
     parser.add_argument("--weight_decay", default=1e-4, type=float)
     parser.add_argument(
@@ -481,13 +519,13 @@ def main():
     # Data parameters.
     parser.add_argument("--data_path", default=None, type=str, required=False)
     parser.add_argument("--video_path_prefix", default="", type=str)
-    parser.add_argument("--workers", default=16, type=int)
-    parser.add_argument("--batch_size", default=16, type=int)
+    parser.add_argument("--workers", default=8, type=int) #AUGUSTO: ORIGINALLY WAS 16
+    parser.add_argument("--batch_size", default=8, type=int) #AUGUSTO: ORIGINALLY WAS 16
     parser.add_argument("--clip_duration", default=26, type=float)
     parser.add_argument(
         "--data_type", default="video", choices=["video", "audio"], type=str
     )
-    parser.add_argument("--video_num_subsampled", default=6, type=int)
+    parser.add_argument("--video_num_subsampled", default=15, type=int) #AUGUSTO: ORIGINALLY WAS 6
     parser.add_argument("--video_means", default=(0.45, 0.45, 0.45), type=tuple)
     parser.add_argument("--video_stds", default=(0.225, 0.225, 0.225), type=tuple)
     parser.add_argument("--video_crop_size", default=224, type=int)
@@ -542,6 +580,8 @@ def train(args):
     classification_module = VideoClassificationLightningModule(args)
     data_module = KineticsDataModule(args)
     trainer.fit(classification_module, data_module)
+
+    trainer.test()   #AUGUSTO: I THINK I NEVER EXECUTED THIS
 
 
 def setup_logger():
