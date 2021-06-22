@@ -116,7 +116,10 @@ class RandomClipSampler(ClipSampler):
 
         """
         max_possible_clip_start = max(video_duration - self._clip_duration, 0)
-        clip_start_sec = random.uniform(0, max_possible_clip_start)
+
+        # AUGUSTO: it doesnt matter where to start, always start from zero, we made the videos, is not a full video
+        # from which we start the "part/clip"
+        clip_start_sec = 0 #AUGUSTO: random.uniform(0, max_possible_clip_start)
         return ClipInfo(
             clip_start_sec, clip_start_sec + self._clip_duration, 0, 0, True
         )
