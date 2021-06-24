@@ -16,11 +16,11 @@ import pytorchvideo.models.slowfast
 import pytorchvideo.models.stem
 import torch
 import torch.nn.functional as F
-from pytorch_lightning.callbacks import LearningRateMonitor
+from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorchvideo.transforms import (ApplyTransformToKey, Normalize, RandomShortSideScale, RemoveKey, ShortSideScale,
                                      UniformTemporalSubsample, )
 from slurm import copy_and_run_with_config
-from torch.utils.data import DistributedSampler, RandomSampler
+from torch.utils.data import DistributedSampler, SequentialSampler, BatchSampler, Sampler, RandomSampler
 from torchaudio.transforms import MelSpectrogram, Resample
 from torchvision.transforms import (CenterCrop, Compose, Lambda, RandomCrop,  # RandomHorizontalFlip,
 )
@@ -154,7 +154,7 @@ class VideoClassificationLightningModule(pytorch_lightning.LightningModule):
         sum = np.full_like(self.val_confusionmatrix[0], 0)
         for i in range(len(self.val_confusionmatrix)):
             sum = sum + self.val_confusionmatrix[i]
-        print(sum)
+        print('\n',sum)
         print('-------------------------------------------')
 
         # fig = plt.figure()
@@ -165,6 +165,7 @@ class VideoClassificationLightningModule(pytorch_lightning.LightningModule):
         #plt.show()
         #lightning logger - self.logger.experiment.add_figure('epoch_confmat_val', fig, global_step=self.global_step)
         self.logger.experiment.log({"epoch_confmat_val": [wandb.Image(fig, caption="epoch_confmat_val")]})
+        plt.close(fig)
 
     def validation_step(self, batch, batch_idx):
         """
@@ -172,6 +173,9 @@ class VideoClassificationLightningModule(pytorch_lightning.LightningModule):
         simple example it's mostly the same as the training loop but with a different
         metric name.
         """
+        if batch_idx == 0:
+            print('******************>>>>>>>>>>>>>>> labels, first batch: ', batch["video_label"][0])
+
         x = batch[self.batch_key]
         y_hat = self.model(x)
         loss = F.cross_entropy(y_hat, batch["video_label"][0])
@@ -208,6 +212,7 @@ class VideoClassificationLightningModule(pytorch_lightning.LightningModule):
         #plt.show()
         #lightning logger self.logger.experiment.add_figure('epoch_confmat_test', fig, global_step=self.global_step)
         self.logger.experiment.log({"epoch_confmat_test": [wandb.Image(fig, caption="epoch_confmat_test")]})
+        plt.close(fig)
 
     def test_step(self, batch, batch_idx):
         """
@@ -332,6 +337,7 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
         Defines the train DataLoader that the PyTorch Lightning Trainer trains/tests with.
         """
         sampler = DistributedSampler if self.trainer.use_ddp else RandomSampler
+        #sampler = DistributedSampler if self.trainer.use_ddp else BatchSampler
         train_transform = self._make_transforms(mode="train")
 
         # self.train_dataset = pytorchvideo.data.Charades(data_path='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360_3D-MASKED/train/annotations_train.txt',
@@ -363,6 +369,7 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
         self.train_dataset = pytorchvideo.data.Charades(
             data_path='/media/14TBDISK/ballardini/pytorchvideotest/alcala26-15frame/train/annotations_train.txt',
             clip_sampler=pytorchvideo.data.make_clip_sampler("random", self.args.clip_duration), video_sampler=sampler,
+            #clip_sampler=pytorchvideo.data.make_clip_sampler("constant_clips_per_video", self.args.clip_duration, 1), video_sampler=sampler,
             transform=train_transform,
             video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/alcala26-15frame/train',
             frames_per_clip=None)
@@ -379,13 +386,14 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
         #     )
         # )
         return torch.utils.data.DataLoader(self.train_dataset, batch_size=self.args.batch_size,
-            num_workers=self.args.workers, )
+            num_workers=self.args.workers)
 
     def val_dataloader(self):
         """
         Defines the train DataLoader that the PyTorch Lightning Trainer trains/tests with.
         """
         sampler = DistributedSampler if self.trainer.use_ddp else RandomSampler
+        #sampler = DistributedSampler if self.trainer.use_ddp else SequentialSampler
         val_transform = self._make_transforms(mode="val")
 
         # self.val_dataset = pytorchvideo.data.Charades(data_path='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360_3D-MASKED/validation/annotations_validation.txt',
@@ -421,7 +429,8 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
 
         self.val_dataset = pytorchvideo.data.Charades(
             data_path='/media/14TBDISK/ballardini/pytorchvideotest/alcala26-15frame/validation/annotations_validation.txt',
-            clip_sampler=pytorchvideo.data.make_clip_sampler("random", self.args.clip_duration), video_sampler=sampler,
+            clip_sampler=pytorchvideo.data.make_clip_sampler("uniform", self.args.clip_duration), video_sampler=sampler,
+            #clip_sampler=pytorchvideo.data.make_clip_sampler("constant_clips_per_video", self.args.clip_duration, 1),video_sampler=sampler,
             transform=val_transform,
             video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/alcala26-15frame/validation',
             frames_per_clip=None)
@@ -438,12 +447,13 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
         #     )
         # )
         return torch.utils.data.DataLoader(self.val_dataset, batch_size=self.args.batch_size,
-            num_workers=self.args.workers, )
+            num_workers=self.args.workers)
 
     # AUGUSTO: I THINK I NEVER USED THIS
     def test_dataloader(self):
 
-        sampler = DistributedSampler if self.trainer.use_ddp else RandomSampler
+        #sampler = DistributedSampler if self.trainer.use_ddp else RandomSampler
+        sampler = DistributedSampler if self.trainer.use_ddp else SequentialSampler
         val_transform = self._make_transforms(mode="val")
 
         self.test_dataset = pytorchvideo.data.Charades(
@@ -529,10 +539,13 @@ def main():
     parser.add_argument("--audio_logmel_mean", default=-7.03, type=float)
     parser.add_argument("--audio_logmel_std", default=4.66, type=float)
 
+    checkpoint_callback = ModelCheckpoint(monitor='val_acc_epoch', mode='min', save_last=True,
+                                          dirpath='/media/14TBDISK/ballardini/pytorchvideotest/checkpoints')
+
     # Trainer parameters.
     parser = pytorch_lightning.Trainer.add_argparse_args(parser)
-    parser.set_defaults(max_epochs=100,  # AUGUSTO NUMBER OF EPOCHS
-        callbacks=[LearningRateMonitor()], replace_sampler_ddp=False, reload_dataloaders_every_epoch=False, )
+    parser.set_defaults(max_epochs=1000,  # AUGUSTO NUMBER OF EPOCHS
+        callbacks=[LearningRateMonitor(), checkpoint_callback], replace_sampler_ddp=False, reload_dataloaders_every_epoch=False, )
 
     # Build trainer, ResNet lightning-module and Kinetics data-module.
     args = parser.parse_args()
@@ -546,6 +559,9 @@ def main():
 
 
 def train(args):
+    #checkpoint_callback = ModelCheckpoint(monitor='val_acc_epoch', mode='min', save_last=True,
+    #                                      dirpath='/media/14TBDISK/ballardini/pytorchvideotest/checkpoints')
+    #trainer = pytorch_lightning.Trainer(callbacks=[checkpoint_callback]).from_argparse_args(args)
     trainer = pytorch_lightning.Trainer.from_argparse_args(args)
     wandb_logger = WandbLogger()
     trainer.logger = wandb_logger
