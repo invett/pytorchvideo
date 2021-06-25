@@ -589,9 +589,15 @@ def main():
     # parser.add_argument("--audio_logmel_mean", default=-7.03, type=float)
     # parser.add_argument("--audio_logmel_std", default=4.66, type=float)
 
-    checkpoint_callback = ModelCheckpoint(monitor='val_acc_epoch', mode='max', save_top_k=1,
-                                          dirpath='/media/14TBDISK/ballardini/pytorchvideotest/checkpoints/130',
-                                          verbose=True, save_last=True)
+    wandb_logger = WandbLogger()
+
+    checkpoint_callback = ModelCheckpoint(monitor='val_acc_epoch',
+                                          mode='max',
+                                          save_top_k=1,
+                                          dirpath='/media/14TBDISK/ballardini/pytorchvideotest/checkpoints',
+                                          verbose=True,
+                                          save_last=False,
+                                          filename=wandb_logger.experiment.name+'_{epoch}-{val_acc_epoch:.2f}')
 
     early_stopping = EarlyStopping(monitor='val_acc_epoch', patience=200, verbose=True, mode='max')
 
@@ -608,12 +614,20 @@ def main():
     # Build trainer, ResNet lightning-module and Kinetics data-module.
     args = parser.parse_args()
 
-    if args.on_cluster:
-        copy_and_run_with_config(train, args, args.working_directory, job_name=args.job_name, time="72:00:00",
-            partition=args.partition, gpus_per_node=args.gpus, ntasks_per_node=args.gpus, cpus_per_task=10, mem="470GB",
-            nodes=args.num_nodes, constraint="volta32gb", )
-    else:  # local
-        train(args)
+    # if args.on_cluster:
+    #     copy_and_run_with_config(train, args, args.working_directory, job_name=args.job_name, time="72:00:00",
+    #         partition=args.partition, gpus_per_node=args.gpus, ntasks_per_node=args.gpus, cpus_per_task=10, mem="470GB",
+    #         nodes=args.num_nodes, constraint="volta32gb", )
+    # else:  # local
+    #     train(args)
+
+    wandb_logger.log_hyperparams(args)
+    trainer = pytorch_lightning.Trainer.from_argparse_args(args)
+    trainer.logger = wandb_logger
+    classification_module = VideoClassificationLightningModule(args)
+    data_module = KineticsDataModule(args)
+    trainer.fit(classification_module, data_module)
+    trainer.test()
 
 
 def train(args):
@@ -624,8 +638,7 @@ def train(args):
     classification_module = VideoClassificationLightningModule(args)
     data_module = KineticsDataModule(args)
     trainer.fit(classification_module, data_module)
-
-    trainer.test()  # AUGUSTO: I THINK I NEVER EXECUTED THIS
+    trainer.test()
 
 
 def setup_logger():
