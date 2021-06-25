@@ -191,10 +191,8 @@ class VideoClassificationLightningModule(pytorch_lightning.LightningModule):
         # print(confmat(F.softmax(y_hat, dim=-1), batch["video_label"][0]))
         # https://pytorch-lightning.readthedocs.io/en/stable/extensions/logging.html#logging-from-a-lightningmodule
         confmat = ConfusionMatrix(num_classes=7, normalize='none').cuda()
-        data = confmat(F.softmax(y_hat, dim=-1), batch["video_label"][0]).detach().cpu().numpy()
-        self.val_confusionmatrix.append(data.copy())
-
-        self.log("confusionmatrix", data, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+        self.val_confusionmatrix.append(confmat(F.softmax(y_hat, dim=-1), batch["video_label"][0]).cpu().numpy())
+        #self.log("confusionmatrix", data, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
 
         return loss
 
@@ -344,39 +342,41 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
         sampler = DistributedSampler if self.trainer.use_ddp else RandomSampler
         train_transform = self._make_transforms(mode="train")
 
-        # self.train_dataset = pytorchvideo.data.Charades(data_path='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360_3D-MASKED/train/annotations_train.txt',
-        #                                                 clip_sampler=pytorchvideo.data.make_clip_sampler("random",
-        #                                                                                     self.args.clip_duration),
-        #                                                 video_sampler=sampler,
-        #                                                 transform=train_transform,
-        #                                                 video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360_3D-MASKED/train',
-        #                                                 frames_per_clip=None
-        #                                                 )
-        # self.train_dataset = pytorchvideo.data.Charades(data_path='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360/train/annotations_train.txt',
-        #                                                 clip_sampler=pytorchvideo.data.make_clip_sampler("random",
-        #                                                                                     self.args.clip_duration),
-        #                                                 video_sampler=sampler,
-        #                                                 transform=train_transform,
-        #                                                 video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360/train',
-        #                                                 frames_per_clip=None
-        #                                                 )
-        # self.train_dataset = pytorchvideo.data.Charades(data_path='/media/14TBDISK/ballardini/pytorchvideotest/alcala26/train/annotations_train.txt',
-        #                                                 clip_sampler=pytorchvideo.data.make_clip_sampler("random",
-        #                                                                                     self.args.clip_duration),
-        #                                                 video_sampler=sampler,
-        #                                                 transform=train_transform,
-        #                                                 video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/alcala26/train',
-        #                                                 frames_per_clip=None
-        #                                                 )
-
-        # AUGUSTO: CHECK HERE 15 FRAME OR OTHER
-        self.train_dataset = pytorchvideo.data.Charades(
-            data_path='/media/14TBDISK/ballardini/pytorchvideotest/alcala26-15frame/train/annotations_train.txt',
-            clip_sampler=pytorchvideo.data.make_clip_sampler("random", self.args.clip_duration), video_sampler=sampler,
-            #clip_sampler=pytorchvideo.data.make_clip_sampler("constant_clips_per_video", self.args.clip_duration, 1), video_sampler=sampler,
-            transform=train_transform,
-            video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/alcala26-15frame/train',
-            frames_per_clip=None)
+        if self.args.whichdataset== 'KITTI-360_3D-MASKED':
+            self.train_dataset = pytorchvideo.data.Charades(data_path='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360_3D-MASKED/train/annotations_train.txt',
+                                                            clip_sampler=pytorchvideo.data.make_clip_sampler("random",
+                                                                                                self.args.clip_duration),
+                                                            video_sampler=sampler,
+                                                            transform=train_transform,
+                                                            video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360_3D-MASKED/train',
+                                                            frames_per_clip=None
+                                                            )
+        elif self.args.whichdataset== 'KITTI-360':
+            self.train_dataset = pytorchvideo.data.Charades(data_path='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360/train/annotations_train.txt',
+                                                            clip_sampler=pytorchvideo.data.make_clip_sampler("random",
+                                                                                                self.args.clip_duration),
+                                                            video_sampler=sampler,
+                                                            transform=train_transform,
+                                                            video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360/train',
+                                                            frames_per_clip=None
+                                                            )
+        elif self.args.whichdataset== 'alcala26':
+            self.train_dataset = pytorchvideo.data.Charades(data_path='/media/14TBDISK/ballardini/pytorchvideotest/alcala26/train/annotations_train.txt',
+                                                            clip_sampler=pytorchvideo.data.make_clip_sampler("random",
+                                                                                                self.args.clip_duration),
+                                                            video_sampler=sampler,
+                                                            transform=train_transform,
+                                                            video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/alcala26/train',
+                                                            frames_per_clip=None
+                                                            )
+        elif self.args.whichdataset== 'alcala26-15frame':
+            self.train_dataset = pytorchvideo.data.Charades(
+                data_path='/media/14TBDISK/ballardini/pytorchvideotest/alcala26-15frame/train/annotations_train.txt',
+                clip_sampler=pytorchvideo.data.make_clip_sampler("random", self.args.clip_duration), video_sampler=sampler,
+                #clip_sampler=pytorchvideo.data.make_clip_sampler("constant_clips_per_video", self.args.clip_duration, 1), video_sampler=sampler,
+                transform=train_transform,
+                video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/alcala26-15frame/train',
+                frames_per_clip=None)
 
         # self.train_dataset = LimitDataset(
         #     pytorchvideo.data.Kinetics(
@@ -400,45 +400,46 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
         #sampler = DistributedSampler if self.trainer.use_ddp else SequentialSampler
         val_transform = self._make_transforms(mode="val")
 
-        # self.val_dataset = pytorchvideo.data.Charades(data_path='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360_3D-MASKED/validation/annotations_validation.txt',
-        #                                               clip_sampler=pytorchvideo.data.make_clip_sampler("random",
-        #                                                                                   self.args.clip_duration),
-        #                                               video_sampler=sampler,
-        #                                               transform=val_transform,
-        #                                               video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360_3D-MASKED/validation',
-        #                                               frames_per_clip=None
-        #                                               )
-
-        # self.val_dataset = pytorchvideo.data.Charades(data_path='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360/validation/annotations_validation.txt',
-        #                                               clip_sampler=pytorchvideo.data.make_clip_sampler("random",
-        #                                                                                   self.args.clip_duration),
-        #                                               video_sampler=sampler,
-        #                                               transform=val_transform,
-        #                                               video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360/validation',
-        #                                               frames_per_clip=None
-        #                                               )
-
-        # self.val_dataset = pytorchvideo.data.Charades(data_path='/media/14TBDISK/ballardini/pytorchvideotest/alcala26/validation/annotations_validation.txt',
-        #                                               clip_sampler=pytorchvideo.data.make_clip_sampler("random",
-        #                                                                                   self.args.clip_duration),
-        #                                               video_sampler=sampler,
-        #                                               transform=val_transform,
-        #                                               video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/alcala26/validation',
-        #                                               frames_per_clip=None
-        #                                               )
+        if self.args.whichdataset== 'KITTI-360_3D-MASKED':
+            self.val_dataset = pytorchvideo.data.Charades(data_path='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360_3D-MASKED/validation/annotations_validation.txt',
+                                                          clip_sampler=pytorchvideo.data.make_clip_sampler("random",
+                                                                                              self.args.clip_duration),
+                                                          video_sampler=sampler,
+                                                          transform=val_transform,
+                                                          video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360_3D-MASKED/validation',
+                                                          frames_per_clip=None
+                                                          )
+        elif self.args.whichdataset== 'KITTI-360':
+            self.val_dataset = pytorchvideo.data.Charades(data_path='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360/validation/annotations_validation.txt',
+                                                          clip_sampler=pytorchvideo.data.make_clip_sampler("random",
+                                                                                              self.args.clip_duration),
+                                                          video_sampler=sampler,
+                                                          transform=val_transform,
+                                                          video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360/validation',
+                                                          frames_per_clip=None
+                                                          )
+        elif self.args.whichdataset== 'alcala26':
+            self.val_dataset = pytorchvideo.data.Charades(data_path='/media/14TBDISK/ballardini/pytorchvideotest/alcala26/validation/annotations_validation.txt',
+                                                          clip_sampler=pytorchvideo.data.make_clip_sampler("random",
+                                                                                              self.args.clip_duration),
+                                                          video_sampler=sampler,
+                                                          transform=val_transform,
+                                                          video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/alcala26/validation',
+                                                          frames_per_clip=None
+                                                          )
+        elif self.args.whichdataset== 'alcala26-15frame':
+            self.val_dataset = pytorchvideo.data.Charades(
+                data_path='/media/14TBDISK/ballardini/pytorchvideotest/alcala26-15frame/validation/annotations_validation.txt',
+                #clip_sampler=pytorchvideo.data.make_clip_sampler("uniform", self.args.clip_duration), video_sampler=sampler,
+                #clip_sampler=pytorchvideo.data.make_clip_sampler("constant_clips_per_video", self.args.clip_duration, 1),video_sampler=sampler,
+                clip_sampler=pytorchvideo.data.make_clip_sampler("random",self.args.clip_duration),video_sampler=sampler,
+                transform=val_transform,
+                video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/alcala26-15frame/validation',
+                frames_per_clip=None)
 
         # AUGUSTO:
         # ???          self.val_dataset = pytorchvideo.data.Charades(data_path='/media/14TBDISK/ballardini/pytorchvideotest/alcala26-15frame/validation/annotations_validation.txt',
         #                                                  video_path_prefix = '/media/14TBDISK/ballardini/pytorchvideotest/alcala26-15frame/validation',
-
-        self.val_dataset = pytorchvideo.data.Charades(
-            data_path='/media/14TBDISK/ballardini/pytorchvideotest/alcala26-15frame/validation/annotations_validation.txt',
-            #clip_sampler=pytorchvideo.data.make_clip_sampler("uniform", self.args.clip_duration), video_sampler=sampler,
-            #clip_sampler=pytorchvideo.data.make_clip_sampler("constant_clips_per_video", self.args.clip_duration, 1),video_sampler=sampler,
-            clip_sampler=pytorchvideo.data.make_clip_sampler("random",self.args.clip_duration),video_sampler=sampler,
-            transform=val_transform,
-            video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/alcala26-15frame/validation',
-            frames_per_clip=None)
 
         # self.val_dataset = LimitDataset(
         #     pytorchvideo.data.Kinetics(
@@ -461,11 +462,51 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
         sampler = DistributedSampler if self.trainer.use_ddp else SequentialSampler
         val_transform = self._make_transforms(mode="val")
 
-        self.test_dataset = pytorchvideo.data.Charades(
-            data_path='/media/14TBDISK/ballardini/pytorchvideotest/alcala26-15frame/test/annotations_test.txt',
-            clip_sampler=pytorchvideo.data.make_clip_sampler("random", self.args.clip_duration), video_sampler=sampler,
-            transform=val_transform,
-            video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/alcala26-15frame/test', frames_per_clip=None)
+        if self.args.whichdataset== 'KITTI-360_3D-MASKED':
+            self.val_dataset = pytorchvideo.data.Charades(
+                data_path='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360_3D-MASKED/test/annotations_test.txt',
+                clip_sampler=pytorchvideo.data.make_clip_sampler("random", self.args.clip_duration),
+                video_sampler=sampler,
+                transform=val_transform,
+                video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360_3D-MASKED/test',
+                frames_per_clip=None)
+
+        elif self.args.whichdataset== 'KITTI-360':
+            self.val_dataset = pytorchvideo.data.Charades(
+                data_path='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360/test/annotations_test.txt',
+                clip_sampler=pytorchvideo.data.make_clip_sampler("random", self.args.clip_duration),
+                video_sampler=sampler,
+                transform=val_transform,
+                video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360/test',
+                frames_per_clip=None)
+
+        elif self.args.whichdataset== 'alcala26':
+            self.val_dataset = pytorchvideo.data.Charades(
+                data_path='/media/14TBDISK/ballardini/pytorchvideotest/alcala26/test/annotations_test.txt',
+                clip_sampler=pytorchvideo.data.make_clip_sampler("random", self.args.clip_duration),
+                video_sampler=sampler,
+                transform=val_transform,
+                video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/alcala26/test',
+                frames_per_clip=None)
+
+        elif self.args.whichdataset== 'alcala26-15frame':
+            self.val_dataset = pytorchvideo.data.Charades(
+                data_path='/media/14TBDISK/ballardini/pytorchvideotest/alcala26-15frame/test/annotations_test.txt',
+                clip_sampler=pytorchvideo.data.make_clip_sampler("random", self.args.clip_duration),
+                video_sampler=sampler,
+                transform=val_transform,
+                video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/alcala26-15frame/test',
+                frames_per_clip=None)
+
+            # self.test_dataset = pytorchvideo.data.Charades(
+            #     data_path='/media/14TBDISK/ballardini/pytorchvideotest/alcala26-15frame/test/annotations_test.txt',
+            #     clip_sampler=pytorchvideo.data.make_clip_sampler("random", self.args.clip_duration),
+            #     video_sampler=sampler, transform=val_transform,
+            #     video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/alcala26-15frame/test',
+            #     frames_per_clip=None)
+
+
+
         return torch.utils.data.DataLoader(self.test_dataset, batch_size=self.args.batch_size,
             num_workers=self.args.workers)
 
@@ -536,6 +577,9 @@ def main():
     parser.add_argument("--video_max_short_side_scale", default=320, type=int)
     parser.add_argument("--video_horizontal_flip_p", default=0.0, type=float)
 
+    parser.add_argument("--whichdataset", type=str, default=None,
+                        choices=['KITTI-360_3D-MASKED', 'KITTI-360', 'alcala26', 'alcala26-15frame'])
+
     # parser.add_argument("--audio_raw_sample_rate", default=44100, type=int)
     # parser.add_argument("--audio_resampled_rate", default=16000, type=int)
     # parser.add_argument("--audio_mel_window_size", default=32, type=int)
@@ -546,7 +590,7 @@ def main():
     # parser.add_argument("--audio_logmel_std", default=4.66, type=float)
 
     checkpoint_callback = ModelCheckpoint(monitor='val_acc_epoch', mode='max', save_top_k=1,
-                                          dirpath='/media/14TBDISK/ballardini/pytorchvideotest/checkpoints',
+                                          dirpath='/media/14TBDISK/ballardini/pytorchvideotest/checkpoints/130',
                                           verbose=True, save_last=True)
 
     early_stopping = EarlyStopping(monitor='val_acc_epoch', patience=200, verbose=True, mode='max')
@@ -558,7 +602,8 @@ def main():
                         callbacks=[LearningRateMonitor(), checkpoint_callback, early_stopping],
                         replace_sampler_ddp=False,
                         reload_dataloaders_every_epoch=False,
-                        check_val_every_n_epoch=1)
+                        check_val_every_n_epoch=1,
+                        whichdataset='alcala26-15frame')
 
     # Build trainer, ResNet lightning-module and Kinetics data-module.
     args = parser.parse_args()
