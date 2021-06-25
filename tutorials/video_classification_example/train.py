@@ -16,7 +16,9 @@ import pytorchvideo.models.slowfast
 import pytorchvideo.models.stem
 import torch
 import torch.nn.functional as F
-from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
+from pytorch_lightning import Trainer
+from argparse import ArgumentParser
+from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint, EarlyStopping
 from pytorchvideo.transforms import (ApplyTransformToKey, Normalize, RandomShortSideScale, RemoveKey, ShortSideScale,
                                      UniformTemporalSubsample, )
 from slurm import copy_and_run_with_config
@@ -67,6 +69,7 @@ class VideoClassificationLightningModule(pytorch_lightning.LightningModule):
         super().__init__()
         self.train_accuracy = pytorch_lightning.metrics.Accuracy()
         self.val_accuracy = pytorch_lightning.metrics.Accuracy()
+        #self.save_hyperparameters() #not here, do it for wandb, look at the end of this script more or less.. wandb save hyper
 
         #############
         # PTV Model #
@@ -188,8 +191,10 @@ class VideoClassificationLightningModule(pytorch_lightning.LightningModule):
         # print(confmat(F.softmax(y_hat, dim=-1), batch["video_label"][0]))
         # https://pytorch-lightning.readthedocs.io/en/stable/extensions/logging.html#logging-from-a-lightningmodule
         confmat = ConfusionMatrix(num_classes=7, normalize='none').cuda()
-        self.val_confusionmatrix.append(confmat(F.softmax(y_hat, dim=-1), batch["video_label"][0]).cpu().numpy())
+        data = confmat(F.softmax(y_hat, dim=-1), batch["video_label"][0]).detach().cpu().numpy()
+        self.val_confusionmatrix.append(data.copy())
 
+        self.log("confusionmatrix", data, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
 
         return loss
 
@@ -337,7 +342,6 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
         Defines the train DataLoader that the PyTorch Lightning Trainer trains/tests with.
         """
         sampler = DistributedSampler if self.trainer.use_ddp else RandomSampler
-        #sampler = DistributedSampler if self.trainer.use_ddp else BatchSampler
         train_transform = self._make_transforms(mode="train")
 
         # self.train_dataset = pytorchvideo.data.Charades(data_path='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360_3D-MASKED/train/annotations_train.txt',
@@ -386,7 +390,7 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
         #     )
         # )
         return torch.utils.data.DataLoader(self.train_dataset, batch_size=self.args.batch_size,
-            num_workers=self.args.workers)
+            num_workers=self.args.workers, pin_memory=True)
 
     def val_dataloader(self):
         """
@@ -429,8 +433,9 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
 
         self.val_dataset = pytorchvideo.data.Charades(
             data_path='/media/14TBDISK/ballardini/pytorchvideotest/alcala26-15frame/validation/annotations_validation.txt',
-            clip_sampler=pytorchvideo.data.make_clip_sampler("uniform", self.args.clip_duration), video_sampler=sampler,
+            #clip_sampler=pytorchvideo.data.make_clip_sampler("uniform", self.args.clip_duration), video_sampler=sampler,
             #clip_sampler=pytorchvideo.data.make_clip_sampler("constant_clips_per_video", self.args.clip_duration, 1),video_sampler=sampler,
+            clip_sampler=pytorchvideo.data.make_clip_sampler("random",self.args.clip_duration),video_sampler=sampler,
             transform=val_transform,
             video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/alcala26-15frame/validation',
             frames_per_clip=None)
@@ -462,7 +467,7 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
             transform=val_transform,
             video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/alcala26-15frame/test', frames_per_clip=None)
         return torch.utils.data.DataLoader(self.test_dataset, batch_size=self.args.batch_size,
-            num_workers=self.args.workers, )
+            num_workers=self.args.workers)
 
 
 class LimitDataset(torch.utils.data.Dataset):
@@ -505,9 +510,10 @@ def main():
     parser.add_argument("--partition", default="dev", type=str)
 
     # Model parameters.
-    parser.add_argument("--lr", "--learning-rate", default=0.1, type=float)  # AUGUSTO: ORIGINAL
-    # parser.add_argument("--lr", "--learning-rate", default=0.01, type=float) #AUGUSTO: TEST 1
-    # parser.add_argument("--lr", "--learning-rate", default=0.0001, type=float) #AUGUSTO: TEST 2
+    #parser.add_argument("--lr", "--learning-rate", default=0.1, type=float)  # AUGUSTO: ORIGINAL
+    #parser.add_argument("--lr", "--learning-rate", default=0.01, type=float) #AUGUSTO: TEST 1
+    #parser.add_argument("--lr", "--learning-rate", default=0.0001, type=float) #AUGUSTO: TEST 2
+    parser.add_argument("--lr", "--learning-rate", default=0.00001, type=float) #AUGUSTO: TEST 2
     parser.add_argument("--momentum", default=0.9, type=float)
     parser.add_argument("--weight_decay", default=1e-4, type=float)
     parser.add_argument("--arch", default="video_resnet", choices=["video_resnet", "audio_resnet"], type=str, )
@@ -515,7 +521,7 @@ def main():
     # Data parameters.
     parser.add_argument("--data_path", default=None, type=str, required=False)
     parser.add_argument("--video_path_prefix", default="", type=str)
-    parser.add_argument("--workers", default=8, type=int)  # AUGUSTO: ORIGINALLY WAS 16
+    parser.add_argument("--workers", default=8, type=int)  # AUGUSTO: ORIGINALLY WAS 16 -> 8 -> 1
     parser.add_argument("--batch_size", default=8, type=int)  # AUGUSTO: ORIGINALLY WAS 16
 
     # this should not be effective anymore as i changed the code to use all the sequence length. was originally used to
@@ -530,22 +536,29 @@ def main():
     parser.add_argument("--video_max_short_side_scale", default=320, type=int)
     parser.add_argument("--video_horizontal_flip_p", default=0.0, type=float)
 
-    parser.add_argument("--audio_raw_sample_rate", default=44100, type=int)
-    parser.add_argument("--audio_resampled_rate", default=16000, type=int)
-    parser.add_argument("--audio_mel_window_size", default=32, type=int)
-    parser.add_argument("--audio_mel_step_size", default=16, type=int)
-    parser.add_argument("--audio_num_mels", default=80, type=int)
-    parser.add_argument("--audio_mel_num_subsample", default=128, type=int)
-    parser.add_argument("--audio_logmel_mean", default=-7.03, type=float)
-    parser.add_argument("--audio_logmel_std", default=4.66, type=float)
+    # parser.add_argument("--audio_raw_sample_rate", default=44100, type=int)
+    # parser.add_argument("--audio_resampled_rate", default=16000, type=int)
+    # parser.add_argument("--audio_mel_window_size", default=32, type=int)
+    # parser.add_argument("--audio_mel_step_size", default=16, type=int)
+    # parser.add_argument("--audio_num_mels", default=80, type=int)
+    # parser.add_argument("--audio_mel_num_subsample", default=128, type=int)
+    # parser.add_argument("--audio_logmel_mean", default=-7.03, type=float)
+    # parser.add_argument("--audio_logmel_std", default=4.66, type=float)
 
-    checkpoint_callback = ModelCheckpoint(monitor='val_acc_epoch', mode='min', save_last=True,
-                                          dirpath='/media/14TBDISK/ballardini/pytorchvideotest/checkpoints')
+    checkpoint_callback = ModelCheckpoint(monitor='val_acc_epoch', mode='max', save_top_k=1,
+                                          dirpath='/media/14TBDISK/ballardini/pytorchvideotest/checkpoints',
+                                          verbose=True, save_last=True)
+
+    early_stopping = EarlyStopping(monitor='val_acc_epoch', patience=200, verbose=True, mode='max')
 
     # Trainer parameters.
     parser = pytorch_lightning.Trainer.add_argparse_args(parser)
-    parser.set_defaults(max_epochs=1000,  # AUGUSTO NUMBER OF EPOCHS
-        callbacks=[LearningRateMonitor(), checkpoint_callback], replace_sampler_ddp=False, reload_dataloaders_every_epoch=False, )
+    parser.set_defaults(min_epochs=200,
+                        max_epochs=1000,  # AUGUSTO NUMBER OF EPOCHS
+                        callbacks=[LearningRateMonitor(), checkpoint_callback, early_stopping],
+                        replace_sampler_ddp=False,
+                        reload_dataloaders_every_epoch=False,
+                        check_val_every_n_epoch=1)
 
     # Build trainer, ResNet lightning-module and Kinetics data-module.
     args = parser.parse_args()
@@ -559,11 +572,9 @@ def main():
 
 
 def train(args):
-    #checkpoint_callback = ModelCheckpoint(monitor='val_acc_epoch', mode='min', save_last=True,
-    #                                      dirpath='/media/14TBDISK/ballardini/pytorchvideotest/checkpoints')
-    #trainer = pytorch_lightning.Trainer(callbacks=[checkpoint_callback]).from_argparse_args(args)
     trainer = pytorch_lightning.Trainer.from_argparse_args(args)
     wandb_logger = WandbLogger()
+    wandb_logger.log_hyperparams(args)
     trainer.logger = wandb_logger
     classification_module = VideoClassificationLightningModule(args)
     data_module = KineticsDataModule(args)

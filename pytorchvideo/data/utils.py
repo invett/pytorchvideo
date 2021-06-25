@@ -88,6 +88,7 @@ class MultiProcessSampler(torch.utils.data.Sampler):
             iter_start = worker_split[0]
             iter_end = worker_split[-1] + 1
             worker_sampler = itertools.islice(iter(self._sampler), iter_start, iter_end)
+            print('____________________________________________', iter_start, '~', iter_end) #augustoworkers
         else:
 
             # If no worker processes found, we return the full sampler.
