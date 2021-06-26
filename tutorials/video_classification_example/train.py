@@ -81,17 +81,15 @@ class VideoClassificationLightningModule(pytorch_lightning.LightningModule):
         # create_slowfast).
         if self.args.arch == "video_resnet":
             self.batch_key = "video"
-
-            select_net = 0
-            if select_net == 0:
-                self.model = pytorchvideo.models.resnet.create_resnet(input_channel=3, model_num_class=7, )
-            elif select_net == 1:
+            if self.args.selectnet == 'RESNET3D':
+                self.model = pytorchvideo.models.resnet.create_resnet(input_channel=3, model_num_class=7)
+            elif self.args.selectnet == 'X3D':
                 self.model = pytorchvideo.models.x3d.create_x3d(model_num_class=7,
                                                                 input_clip_length=self.args.clip_duration,
                                                                 input_crop_size=224)
-            elif select_net == 2:
+            elif self.args.selectnet == 'SLOWFAST':
                 self.model = pytorchvideo.models.slowfast.create_slowfast(model_num_class=7)
-            elif select_net == 3:
+            else:
                 exit(-33)
 
         elif self.args.arch == "audio_resnet":
@@ -580,6 +578,11 @@ def main():
     parser.add_argument("--whichdataset", type=str, default=None,
                         choices=['KITTI-360_3D-MASKED', 'KITTI-360', 'alcala26', 'alcala26-15frame'])
 
+    parser.add_argument("--selectnet", type=str, default=None,
+                        choices=['RESNET3D', 'X3D', 'SLOWFAST'])
+
+    parser.add_argument("--wandb", action="store_true")
+
     # parser.add_argument("--audio_raw_sample_rate", default=44100, type=int)
     # parser.add_argument("--audio_resampled_rate", default=16000, type=int)
     # parser.add_argument("--audio_mel_window_size", default=32, type=int)
@@ -609,7 +612,8 @@ def main():
                         replace_sampler_ddp=False,
                         reload_dataloaders_every_epoch=False,
                         check_val_every_n_epoch=1,
-                        whichdataset='alcala26-15frame')
+                        whichdataset='alcala26-15frame',
+                        selectnet='RESNET3D')
 
     # Build trainer, ResNet lightning-module and Kinetics data-module.
     args = parser.parse_args()
