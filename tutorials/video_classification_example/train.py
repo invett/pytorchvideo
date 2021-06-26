@@ -308,7 +308,8 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
 
                     # AUGUSTO: OPTION 1
                     RandomShortSideScale(min_size=args.video_min_short_side_scale,
-                        max_size=args.video_max_short_side_scale, ), RandomCrop(args.video_crop_size),
+                                         max_size=args.video_max_short_side_scale),
+                    RandomCrop(args.video_crop_size),
 
                     # BUT ALWAYS EXCLUDE
                     # RandomHorizontalFlip(p=args.video_horizontal_flip_p),
