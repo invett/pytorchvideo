@@ -58,6 +58,26 @@ details inline.
 """
 
 
+class PackPathway(torch.nn.Module):
+    """
+    Transform for converting video frames as a list of tensors.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+
+    def forward(self, frames: torch.Tensor):
+
+        alpha = 3
+
+        fast_pathway = frames
+        # Perform temporal sampling from the fast pathway.
+        slow_pathway = torch.index_select(frames, 1,
+                                          torch.linspace(0, frames.shape[1] - 1, frames.shape[1] // alpha).long(), )
+        frame_list = [slow_pathway, fast_pathway]
+        return frame_list
+
 class VideoClassificationLightningModule(pytorch_lightning.LightningModule):
     def __init__(self, args):
         """
@@ -84,9 +104,10 @@ class VideoClassificationLightningModule(pytorch_lightning.LightningModule):
             if self.args.selectnet == 'RESNET3D':
                 self.model = pytorchvideo.models.resnet.create_resnet(input_channel=3, model_num_class=7)
             elif self.args.selectnet == 'X3D':
-                self.model = pytorchvideo.models.x3d.create_x3d(model_num_class=7,
-                                                                input_clip_length=self.args.clip_duration,
-                                                                input_crop_size=224)
+                # self.model = pytorchvideo.models.x3d.create_x3d(model_num_class=7,
+                #                                                 input_clip_length=self.args.clip_duration,
+                #                                                 input_crop_size=224)
+                self.model = pytorchvideo.models.x3d.create_x3d(model_num_class=7, input_clip_length=6)
             elif self.args.selectnet == 'SLOWFAST':
                 self.model = pytorchvideo.models.slowfast.create_slowfast(model_num_class=7)
             else:
@@ -195,7 +216,6 @@ class VideoClassificationLightningModule(pytorch_lightning.LightningModule):
         return loss
 
     def on_test_start(self):
-        print('gigi')
         self.test_confusionmatrix = []
 
     def on_test_epoch_end(self):
@@ -300,6 +320,14 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
         'Random'), for 'val' mode we use the respective determinstic function.
         """
         args = self.args
+
+        # if self.args.selectnet == 'SLOWFAST':
+        #     # slowfast? https://pytorchvideo.org/docs/tutorial_torchhub_inference
+        #     transform = ApplyTransformToKey(key="video", transform=Compose(
+        #         [UniformTemporalSubsample(args.video_num_subsampled), Lambda(lambda x: x / 255.0), Normalize(args.video_means, args.video_stds),
+        #             CenterCrop(256),PackPathway()]), )
+        #     return transform
+
         return ApplyTransformToKey(key="video", transform=Compose(
             [UniformTemporalSubsample(args.video_num_subsampled), Normalize(args.video_means, args.video_stds), ] + (
                 [  # AUGUSTO: OPTION 2
@@ -309,12 +337,12 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
                     # AUGUSTO: OPTION 1
                     RandomShortSideScale(min_size=args.video_min_short_side_scale,
                                          max_size=args.video_max_short_side_scale),
-                    RandomCrop(args.video_crop_size),
+                    RandomCrop(args.video_crop_size), PackPathway() ### FOR SLOWFAST!
 
                     # BUT ALWAYS EXCLUDE
                     # RandomHorizontalFlip(p=args.video_horizontal_flip_p),
                 ] if mode == "train" else [ShortSideScale(args.video_min_short_side_scale),
-                    CenterCrop(args.video_crop_size), ])), )
+                    CenterCrop(args.video_crop_size), PackPathway()])), ) ### FOR SLOWFAST!
 
     def _audio_transform(self):
         """
@@ -454,7 +482,6 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
         return torch.utils.data.DataLoader(self.val_dataset, batch_size=self.args.batch_size,
             num_workers=self.args.workers)
 
-    # AUGUSTO: I THINK I NEVER USED THIS
     def test_dataloader(self):
 
         #sampler = DistributedSampler if self.trainer.use_ddp else RandomSampler
@@ -527,7 +554,7 @@ class LimitDataset(torch.utils.data.Dataset):
         return next(self.dataset_iter)
 
     def __len__(self):
-        return self.dataset.num_videos()
+        return self.dataset.num_videos
 
 
 def main():
