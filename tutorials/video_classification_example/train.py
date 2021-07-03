@@ -328,21 +328,40 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
         #             CenterCrop(256),PackPathway()]), )
         #     return transform
 
-        return ApplyTransformToKey(key="video", transform=Compose(
-            [UniformTemporalSubsample(args.video_num_subsampled), Normalize(args.video_means, args.video_stds), ] + (
-                [  # AUGUSTO: OPTION 2
+        #second test for slowfast, do exactly the same of resnet3d and x3d but adding pathway
+
+        if self.args.selectnet == 'SLOWFAST':
+            return ApplyTransformToKey(key="video", transform=Compose(
+                [UniformTemporalSubsample(args.video_num_subsampled),
+                 Normalize(args.video_means, args.video_stds), ] + ([  # AUGUSTO: OPTION 2
                     # ShortSideScale(args.video_min_short_side_scale),
                     # CenterCrop(args.video_crop_size),
 
                     # AUGUSTO: OPTION 1
                     RandomShortSideScale(min_size=args.video_min_short_side_scale,
-                                         max_size=args.video_max_short_side_scale),
-                    RandomCrop(args.video_crop_size), PackPathway() ### FOR SLOWFAST!
+                                         max_size=args.video_max_short_side_scale), RandomCrop(args.video_crop_size),
+                    PackPathway()  ### FOR SLOWFAST!
 
                     # BUT ALWAYS EXCLUDE
                     # RandomHorizontalFlip(p=args.video_horizontal_flip_p),
                 ] if mode == "train" else [ShortSideScale(args.video_min_short_side_scale),
-                    CenterCrop(args.video_crop_size), PackPathway()])), ) ### FOR SLOWFAST!
+                                           CenterCrop(args.video_crop_size), PackPathway()])), )  ### FOR SLOWFAST!
+        else:
+            return ApplyTransformToKey(key="video", transform=Compose(
+                [UniformTemporalSubsample(args.video_num_subsampled), Normalize(args.video_means, args.video_stds), ] + (
+                    [  # AUGUSTO: OPTION 2
+                        # ShortSideScale(args.video_min_short_side_scale),
+                        # CenterCrop(args.video_crop_size),
+
+                        # AUGUSTO: OPTION 1
+                        RandomShortSideScale(min_size=args.video_min_short_side_scale,
+                                             max_size=args.video_max_short_side_scale),
+                        RandomCrop(args.video_crop_size)
+
+                        # BUT ALWAYS EXCLUDE
+                        # RandomHorizontalFlip(p=args.video_horizontal_flip_p),
+                    ] if mode == "train" else [ShortSideScale(args.video_min_short_side_scale),
+                        CenterCrop(args.video_crop_size)])), )
 
     def _audio_transform(self):
         """
