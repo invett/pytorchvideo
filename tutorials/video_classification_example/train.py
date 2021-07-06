@@ -9,6 +9,8 @@ import os
 import pytorch_lightning
 from pytorch_lightning.loggers import WandbLogger
 import wandb
+from setuptools._distutils.command.check import check
+
 import pytorchvideo.data
 import pytorchvideo.models.resnet
 import pytorchvideo.models.x3d
@@ -56,6 +58,83 @@ The code can be separated into three main components:
 All three components are combined in the train() function. We'll explain the rest of the
 details inline.
 """
+
+
+def outside_make_transforms(args, mode: str):
+    """
+    ##################
+    # PTV Transforms #
+    ##################
+
+    # Each PyTorchVideo dataset has a "transform" arg. This arg takes a
+    # Callable[[Dict], Any], and is used on the output Dict of the dataset to
+    # define any application specific processing or augmentation. Transforms can
+    # either be implemented by the user application or reused from any library
+    # that's domain specific to the modality. E.g. for video we recommend using
+    # TorchVision, for audio we recommend TorchAudio.
+    #
+    # To improve interoperation between domain transform libraries, PyTorchVideo
+    # provides a dictionary transform API that provides:
+    #   - ApplyTransformToKey(key, transform) - applies a transform to specific modality
+    #   - RemoveKey(key) - remove a specific modality from the clip
+    #
+    # In the case that the recommended libraries don't provide transforms that
+    # are common enough for PyTorchVideo use cases, PyTorchVideo will provide them in
+    # the same structure as the recommended library. E.g. TorchVision didn't
+    # have a RandomShortSideScale video transform so it's been added to PyTorchVideo.
+    """
+    transform = [outside_video_transform(args, mode), RemoveKey("audio"), ]
+
+    return Compose(transform)
+
+
+def outside_video_transform(args, mode: str):
+    """
+    This function contains example transforms using both PyTorchVideo and TorchVision
+    in the same Callable. For 'train' mode, we use augmentations (prepended with
+    'Random'), for 'val' mode we use the respective determinstic function.
+    """
+
+    # if self.args.selectnet == 'SLOWFAST':
+    #     # slowfast? https://pytorchvideo.org/docs/tutorial_torchhub_inference
+    #     transform = ApplyTransformToKey(key="video", transform=Compose(
+    #         [UniformTemporalSubsample(args.video_num_subsampled), Lambda(lambda x: x / 255.0), Normalize(args.video_means, args.video_stds),
+    #             CenterCrop(256),PackPathway()]), )
+    #     return transform
+
+    # second test for slowfast, do exactly the same of resnet3d and x3d but adding pathway
+
+    if args.selectnet == 'SLOWFAST':
+        return ApplyTransformToKey(key="video", transform=Compose(
+            [UniformTemporalSubsample(args.video_num_subsampled), Normalize(args.video_means, args.video_stds), ] + (
+                [  # AUGUSTO: OPTION 2
+                    # ShortSideScale(args.video_min_short_side_scale),
+                    # CenterCrop(args.video_crop_size),
+
+                    # AUGUSTO: OPTION 1
+                    RandomShortSideScale(min_size=args.video_min_short_side_scale,
+                                         max_size=args.video_max_short_side_scale), RandomCrop(args.video_crop_size),
+                    PackPathway()  ### FOR SLOWFAST!
+
+                    # BUT ALWAYS EXCLUDE
+                    # RandomHorizontalFlip(p=args.video_horizontal_flip_p),
+                ] if mode == "train" else [ShortSideScale(args.video_min_short_side_scale),
+                                           CenterCrop(args.video_crop_size), PackPathway()])), )  ### FOR SLOWFAST!
+    else:
+        return ApplyTransformToKey(key="video", transform=Compose(
+            [UniformTemporalSubsample(args.video_num_subsampled), Normalize(args.video_means, args.video_stds), ] + (
+                [  # AUGUSTO: OPTION 2
+                    # ShortSideScale(args.video_min_short_side_scale),
+                    # CenterCrop(args.video_crop_size),
+
+                    # AUGUSTO: OPTION 1
+                    RandomShortSideScale(min_size=args.video_min_short_side_scale,
+                                         max_size=args.video_max_short_side_scale), RandomCrop(args.video_crop_size)
+
+                    # BUT ALWAYS EXCLUDE
+                    # RandomHorizontalFlip(p=args.video_horizontal_flip_p),
+                ] if mode == "train" else [ShortSideScale(args.video_min_short_side_scale),
+                                           CenterCrop(args.video_crop_size)])), )
 
 
 class PackPathway(torch.nn.Module):
@@ -230,7 +309,7 @@ class VideoClassificationLightningModule(pytorch_lightning.LightningModule):
         fig = plt.figure(figsize=(10, 7))
         sn.set(font_scale=1.6)
         sn.heatmap(sum, annot=True, cmap='Greys', linewidths=.01, linecolor='Black', square=True, cbar=False)
-        #plt.show()
+        plt.show()
         #lightning logger self.logger.experiment.add_figure('epoch_confmat_test', fig, global_step=self.global_step)
         # #augusto comment this one self.logger.experiment.log({"epoch_confmat_test": [wandb.Image(fig, caption="epoch_confmat_test")]})
         plt.close(fig)
@@ -525,11 +604,13 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
 
         elif self.args.whichdataset == 'alcala26':
             self.test_dataset = pytorchvideo.data.Charades(
-                data_path='/media/14TBDISK/ballardini/pytorchvideotest/alcala26/test/annotations_test.txt',
+                # data_path='/media/14TBDISK/ballardini/pytorchvideotest/alcala26/test/annotations_test.txt',
+                data_path='/media/14TBDISK/ballardini/pytorchvideotest/alcala26/train/annotations_train.txt',
                 clip_sampler=pytorchvideo.data.make_clip_sampler("random", self.args.clip_duration),
                 video_sampler=sampler,
                 transform=val_transform,
-                video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/alcala26/test',
+                # video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/alcala26/test',
+                video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/alcala26/train',
                 frames_per_clip=None)
 
         elif self.args.whichdataset == 'alcala26-15frame':
@@ -677,22 +758,28 @@ def main():
     classification_module = VideoClassificationLightningModule(args)
     data_module = KineticsDataModule(args)
     if args.testonly != "":
-        trainer.test(classification_module, data_module, ckpt_path=args.testonly)
-    else:
-        trainer.fit(classification_module, data_module)
-        trainer.test()
 
+        # classification_module.load_from_checkpoint(checkpoint_path=args.testonly)
+        # classification_module = VideoClassificationLightningModule.load_from_checkpoint(checkpoint_path=args.testonly)
 
-def train(args):
-    # NOT USED ANYMORE
-    trainer = pytorch_lightning.Trainer.from_argparse_args(args)
-    wandb_logger = WandbLogger()
-    wandb_logger.log_hyperparams(args)
-    trainer.logger = wandb_logger
-    classification_module = VideoClassificationLightningModule(args)
-    data_module = KineticsDataModule(args)
-    if args.testonly:
+        # trainer = Trainer(gpus=1)
         trainer.test(model=classification_module, datamodule=data_module)
+        # trainer.test(classification_module, datamodule=data_module, ckpt_path=args.testonly) ckpt_path is ignored if model is passed
+
+        # test_dataset = pytorchvideo.data.Charades(
+        #     data_path='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360_3D-MASKED/test/annotations_test.txt',
+        #     #data_path='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360_3D-MASKED/validation/annotations_validation.txt',
+        #     clip_sampler=pytorchvideo.data.make_clip_sampler("random", args.clip_duration), video_sampler=RandomSampler,
+        #     transform=outside_make_transforms(args, mode="val"),
+        #     video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360_3D-MASKED/test',
+        #     frames_per_clip=None)
+        # test_DL = torch.utils.data.DataLoader(test_dataset, batch_size=args.batch_size, num_workers=0, pin_memory=True)
+        # trainer.test(classification_module, test_dataloaders=test_DL, ckpt_path=args.testonly)
+
+        # checkpoint = torch.load(args.testonly, map_location=lambda storage, loc: storage)
+        # classification_module.load_state_dict(checkpoint['state_dict'])
+        # trainer.test(classification_module, test_dataloaders=None)
+
     else:
         trainer.fit(classification_module, data_module)
         trainer.test()
@@ -709,3 +796,22 @@ def setup_logger():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
+#
+# def train(args):
+#     # NOT USED ANYMORE
+#     trainer = pytorch_lightning.Trainer.from_argparse_args(args)
+#     wandb_logger = WandbLogger()
+#     wandb_logger.log_hyperparams(args)
+#     trainer.logger = wandb_logger
+#     classification_module = VideoClassificationLightningModule(args)
+#     data_module = KineticsDataModule(args)
+#     if args.testonly:
+#         trainer.test(model=classification_module, datamodule=data_module)
+#     else:
+#         trainer.fit(classification_module, data_module)
+#         trainer.test()
