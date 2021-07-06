@@ -184,9 +184,9 @@ class VideoClassificationLightningModule(pytorch_lightning.LightningModule):
         fig = plt.figure(figsize=(10, 7))
         sn.set(font_scale=1.6)
         sn.heatmap(sum, annot=True, cmap='Greys', linewidths=.01, linecolor='Black', square=True, cbar=False)
-        #plt.show()
+        plt.show() #augusto comment this one
         #lightning logger - self.logger.experiment.add_figure('epoch_confmat_val', fig, global_step=self.global_step)
-        self.logger.experiment.log({"epoch_confmat_val": [wandb.Image(fig, caption="epoch_confmat_val")]})
+        # self.logger.experiment.log({"epoch_confmat_val": [wandb.Image(fig, caption="epoch_confmat_val")]}) #augusto comment this one
         plt.close(fig)
 
     def validation_step(self, batch, batch_idx):
@@ -232,7 +232,7 @@ class VideoClassificationLightningModule(pytorch_lightning.LightningModule):
         sn.heatmap(sum, annot=True, cmap='Greys', linewidths=.01, linecolor='Black', square=True, cbar=False)
         #plt.show()
         #lightning logger self.logger.experiment.add_figure('epoch_confmat_test', fig, global_step=self.global_step)
-        self.logger.experiment.log({"epoch_confmat_test": [wandb.Image(fig, caption="epoch_confmat_test")]})
+        # #augusto comment this one self.logger.experiment.log({"epoch_confmat_test": [wandb.Image(fig, caption="epoch_confmat_test")]})
         plt.close(fig)
 
     def test_step(self, batch, batch_idx):
@@ -446,39 +446,37 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
         #sampler = DistributedSampler if self.trainer.use_ddp else SequentialSampler
         val_transform = self._make_transforms(mode="val")
 
-        if self.args.whichdataset== 'KITTI-360_3D-MASKED':
-            self.val_dataset = pytorchvideo.data.Charades(data_path='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360_3D-MASKED/validation/annotations_validation.txt',
-                                                          clip_sampler=pytorchvideo.data.make_clip_sampler("random",
-                                                                                              self.args.clip_duration),
-                                                          video_sampler=sampler,
-                                                          transform=val_transform,
-                                                          video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360_3D-MASKED/validation',
-                                                          frames_per_clip=None
-                                                          )
-        elif self.args.whichdataset== 'KITTI-360':
-            self.val_dataset = pytorchvideo.data.Charades(data_path='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360/validation/annotations_validation.txt',
-                                                          clip_sampler=pytorchvideo.data.make_clip_sampler("random",
-                                                                                              self.args.clip_duration),
-                                                          video_sampler=sampler,
-                                                          transform=val_transform,
-                                                          video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360/validation',
-                                                          frames_per_clip=None
-                                                          )
-        elif self.args.whichdataset== 'alcala26':
-            self.val_dataset = pytorchvideo.data.Charades(data_path='/media/14TBDISK/ballardini/pytorchvideotest/alcala26/validation/annotations_validation.txt',
-                                                          clip_sampler=pytorchvideo.data.make_clip_sampler("random",
-                                                                                              self.args.clip_duration),
-                                                          video_sampler=sampler,
-                                                          transform=val_transform,
-                                                          video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/alcala26/validation',
-                                                          frames_per_clip=None
-                                                          )
-        elif self.args.whichdataset== 'alcala26-15frame':
+        if self.args.whichdataset == 'KITTI-360_3D-MASKED':
+            self.val_dataset = pytorchvideo.data.Charades(
+                data_path='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360_3D-MASKED/validation/annotations_validation.txt',
+                clip_sampler=pytorchvideo.data.make_clip_sampler("random", self.args.clip_duration),
+                video_sampler=sampler,
+                transform=val_transform,
+                video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360_3D-MASKED/validation',
+                frames_per_clip=None)
+        elif self.args.whichdataset == 'KITTI-360':
+            self.val_dataset = pytorchvideo.data.Charades(
+                data_path='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360/validation/annotations_validation.txt',
+                clip_sampler=pytorchvideo.data.make_clip_sampler("random", self.args.clip_duration),
+                video_sampler=sampler,
+                transform=val_transform,
+                video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360/validation',
+                frames_per_clip=None)
+        elif self.args.whichdataset == 'alcala26':
+            self.val_dataset = pytorchvideo.data.Charades(
+                data_path='/media/14TBDISK/ballardini/pytorchvideotest/alcala26/validation/annotations_validation.txt',
+                clip_sampler=pytorchvideo.data.make_clip_sampler("random", self.args.clip_duration),
+                video_sampler=sampler,
+                transform=val_transform,
+                video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/alcala26/validation',
+                frames_per_clip=None)
+        elif self.args.whichdataset == 'alcala26-15frame':
             self.val_dataset = pytorchvideo.data.Charades(
                 data_path='/media/14TBDISK/ballardini/pytorchvideotest/alcala26-15frame/validation/annotations_validation.txt',
-                #clip_sampler=pytorchvideo.data.make_clip_sampler("uniform", self.args.clip_duration), video_sampler=sampler,
-                #clip_sampler=pytorchvideo.data.make_clip_sampler("constant_clips_per_video", self.args.clip_duration, 1),video_sampler=sampler,
-                clip_sampler=pytorchvideo.data.make_clip_sampler("random",self.args.clip_duration),video_sampler=sampler,
+                # clip_sampler=pytorchvideo.data.make_clip_sampler("uniform", self.args.clip_duration), video_sampler=sampler,
+                # clip_sampler=pytorchvideo.data.make_clip_sampler("constant_clips_per_video", self.args.clip_duration, 1),video_sampler=sampler,
+                clip_sampler=pytorchvideo.data.make_clip_sampler("random", self.args.clip_duration),
+                video_sampler=sampler,
                 transform=val_transform,
                 video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/alcala26-15frame/validation',
                 frames_per_clip=None)
@@ -503,12 +501,12 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
 
     def test_dataloader(self):
 
-        #sampler = DistributedSampler if self.trainer.use_ddp else RandomSampler
-        sampler = DistributedSampler if self.trainer.use_ddp else SequentialSampler
+        sampler = DistributedSampler if self.trainer.use_ddp else RandomSampler
+        #sampler = DistributedSampler if self.trainer.use_ddp else SequentialSampler
         val_transform = self._make_transforms(mode="val")
 
-        if self.args.whichdataset== 'KITTI-360_3D-MASKED':
-            self.val_dataset = pytorchvideo.data.Charades(
+        if self.args.whichdataset == 'KITTI-360_3D-MASKED':
+            self.test_dataset = pytorchvideo.data.Charades(
                 data_path='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360_3D-MASKED/test/annotations_test.txt',
                 clip_sampler=pytorchvideo.data.make_clip_sampler("random", self.args.clip_duration),
                 video_sampler=sampler,
@@ -516,8 +514,8 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
                 video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360_3D-MASKED/test',
                 frames_per_clip=None)
 
-        elif self.args.whichdataset== 'KITTI-360':
-            self.val_dataset = pytorchvideo.data.Charades(
+        elif self.args.whichdataset == 'KITTI-360':
+            self.test_dataset = pytorchvideo.data.Charades(
                 data_path='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360/test/annotations_test.txt',
                 clip_sampler=pytorchvideo.data.make_clip_sampler("random", self.args.clip_duration),
                 video_sampler=sampler,
@@ -525,8 +523,8 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
                 video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/KITTI-360/test',
                 frames_per_clip=None)
 
-        elif self.args.whichdataset== 'alcala26':
-            self.val_dataset = pytorchvideo.data.Charades(
+        elif self.args.whichdataset == 'alcala26':
+            self.test_dataset = pytorchvideo.data.Charades(
                 data_path='/media/14TBDISK/ballardini/pytorchvideotest/alcala26/test/annotations_test.txt',
                 clip_sampler=pytorchvideo.data.make_clip_sampler("random", self.args.clip_duration),
                 video_sampler=sampler,
@@ -534,8 +532,8 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
                 video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/alcala26/test',
                 frames_per_clip=None)
 
-        elif self.args.whichdataset== 'alcala26-15frame':
-            self.val_dataset = pytorchvideo.data.Charades(
+        elif self.args.whichdataset == 'alcala26-15frame':
+            self.test_dataset = pytorchvideo.data.Charades(
                 data_path='/media/14TBDISK/ballardini/pytorchvideotest/alcala26-15frame/test/annotations_test.txt',
                 clip_sampler=pytorchvideo.data.make_clip_sampler("random", self.args.clip_duration),
                 video_sampler=sampler,
@@ -549,8 +547,6 @@ class KineticsDataModule(pytorch_lightning.LightningDataModule):
             #     video_sampler=sampler, transform=val_transform,
             #     video_path_prefix='/media/14TBDISK/ballardini/pytorchvideotest/alcala26-15frame/test',
             #     frames_per_clip=None)
-
-
 
         return torch.utils.data.DataLoader(self.test_dataset, batch_size=self.args.batch_size,
             num_workers=self.args.workers)
@@ -630,6 +626,8 @@ def main():
 
     parser.add_argument("--wandb", action="store_true")
 
+    parser.add_argument("--testonly", default="", type=str)
+
     # parser.add_argument("--audio_raw_sample_rate", default=44100, type=int)
     # parser.add_argument("--audio_resampled_rate", default=16000, type=int)
     # parser.add_argument("--audio_mel_window_size", default=32, type=int)
@@ -639,7 +637,7 @@ def main():
     # parser.add_argument("--audio_logmel_mean", default=-7.03, type=float)
     # parser.add_argument("--audio_logmel_std", default=4.66, type=float)
 
-    wandb_logger = WandbLogger()
+    # #augusto comment this one wandb_logger = WandbLogger()
 
     checkpoint_callback = ModelCheckpoint(monitor='val_acc_epoch',
                                           mode='max',
@@ -647,7 +645,8 @@ def main():
                                           dirpath='/media/14TBDISK/ballardini/pytorchvideotest/checkpoints',
                                           verbose=True,
                                           save_last=False,
-                                          filename=wandb_logger.experiment.name+'_{epoch}-{val_acc_epoch:.2f}')
+                                          filename='GIGI_{epoch}-{val_acc_epoch:.2f}')
+                                          # #augusto comment this one filename=wandb_logger.experiment.name+'_{epoch}-{val_acc_epoch:.2f}')
 
     early_stopping = EarlyStopping(monitor='val_acc_epoch', patience=200, verbose=True, mode='max')
 
@@ -672,24 +671,31 @@ def main():
     # else:  # local
     #     train(args)
 
-    wandb_logger.log_hyperparams(args)
+    #augusto comment this one wandb_logger.log_hyperparams(args)
     trainer = pytorch_lightning.Trainer.from_argparse_args(args)
-    trainer.logger = wandb_logger
+    #augusto comment this one trainer.logger = wandb_logger
     classification_module = VideoClassificationLightningModule(args)
     data_module = KineticsDataModule(args)
-    trainer.fit(classification_module, data_module)
-    trainer.test()
+    if args.testonly != "":
+        trainer.test(classification_module, data_module, ckpt_path=args.testonly)
+    else:
+        trainer.fit(classification_module, data_module)
+        trainer.test()
 
 
 def train(args):
+    # NOT USED ANYMORE
     trainer = pytorch_lightning.Trainer.from_argparse_args(args)
     wandb_logger = WandbLogger()
     wandb_logger.log_hyperparams(args)
     trainer.logger = wandb_logger
     classification_module = VideoClassificationLightningModule(args)
     data_module = KineticsDataModule(args)
-    trainer.fit(classification_module, data_module)
-    trainer.test()
+    if args.testonly:
+        trainer.test(model=classification_module, datamodule=data_module)
+    else:
+        trainer.fit(classification_module, data_module)
+        trainer.test()
 
 
 def setup_logger():
