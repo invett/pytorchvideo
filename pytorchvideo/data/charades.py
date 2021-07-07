@@ -218,4 +218,5 @@ def _read_video_paths_and_labels(
     labels = [labels[key] for key in video_names]
     # Aggregate labels from all frames to form video-level labels.
     video_labels = [list(set(itertools.chain(*label_list))) for label_list in labels]
+    print('***** READ ', str(len(video_labels)), ' sequences from ', str(prefix), ' *****')
     return image_paths, labels, video_labels
